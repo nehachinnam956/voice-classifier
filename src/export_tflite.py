@@ -1,11 +1,3 @@
-"""
-export_tflite.py — Convert the trained CNN to a quantized TFLite model
-for mobile bundling.
-
-Usage:
-    python src/export_tflite.py --model models/cnn/cnn_model.keras --out models/cnn/model.tflite
-"""
-
 import argparse
 import os
 import numpy as np
