@@ -1,14 +1,3 @@
-"""
-train_cnn.py — CNN on log-mel spectrograms.
-
-Small architecture deliberately: this dataset/task doesn't need depth, and
-a small model trains fast on Colab's free GPU and converts cleanly to
-TFLite for mobile. Run after download_data.py.
-
-Usage:
-    python src/train_cnn.py --manifest data/manifest.csv --out models/cnn
-"""
-
 import argparse
 import os
 import csv
