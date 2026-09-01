@@ -1,0 +1,9 @@
+data/
+models/
+venv/
+node_modules/
+mobile/node_modules/
+mobile/.expo/
+*.pyc
+__pycache__/
+.DS_Store

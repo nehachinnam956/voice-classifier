@@ -1,0 +1,11 @@
+librosa==0.10.2
+soundfile==0.12.1
+numpy==1.26.4
+scipy==1.13.1
+scikit-learn==1.5.0
+catboost==1.2.5
+tensorflow==2.16.1
+matplotlib==3.9.0
+fastapi==0.111.0
+uvicorn==0.30.1
+python-multipart==0.0.9
