@@ -1,14 +1,3 @@
-"""
-download_data.py — Fetch Google Speech Commands v0.02 and build a manifest.
-
-Run this in Colab (or any environment with open internet access) — it's not
-run in the sandbox that built this repo, since that sandbox's network is
-locked to package registries only.
-
-Usage:
-    python src/download_data.py --out_dir data --classes yes no up down left right on off stop go
-"""
-
 import argparse
 import os
 import tarfile
