@@ -1,12 +1,3 @@
-"""
-data_prep.py — Audio preprocessing & feature extraction.
-
-This module is the single source of truth for how raw audio becomes model
-input. Training and (eventually) the mobile app must both go through this
-exact pipeline, or accuracy silently collapses at inference time. Keep it
-dependency-light so it's easy to port to JS later if needed.
-"""
-
 import numpy as np
 import librosa
 
