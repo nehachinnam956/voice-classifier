@@ -1,15 +1,3 @@
-"""
-evaluate.py — Shared evaluation reporting for both models.
-
-Loads a saved confusion_matrix.npy + classes.txt (written by train_classical.py
-or train_cnn.py) and produces a plot + a plain-text failure-mode summary,
-i.e. which class pairs get confused most, for the technical write-up.
-
-Usage:
-    python src/evaluate.py --model_dir models/classical
-    python src/evaluate.py --model_dir models/cnn
-"""
-
 import argparse
 import os
 import numpy as np
