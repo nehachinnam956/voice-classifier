@@ -1,40 +1,25 @@
 # Voice Detection & Classification System
 
-Records a spoken keyword, classifies it, and shows the prediction with a
-confidence score — trained pipeline in Python, inference on-device in a
-React Native / Expo mobile app.
+I built this for a task that asked for an AI voice classification pipeline end to end: record audio, extract features, train a model, evaluate it properly, and get it running on a phone. I picked keyword spotting on Google's Speech Commands dataset (10 words: yes/no/up/down/left/right/on/off/stop/go, plus unknown and silence) because it's clean, well-labeled, and small enough to iterate on quickly.
 
-**Task:** 10-keyword classification (yes/no/up/down/left/right/on/off/stop/go)
-plus `unknown` and `silence`, on Google Speech Commands v0.02. Two models are
-trained and compared: a classical CatBoost baseline on MFCC statistics, and
-a small CNN on log-mel spectrograms.
+**Live demo:** https://drive.google.com/file/d/1MtuRTOSwUlYyubd6mktfAvER7fQ8Py10/view?usp=drive_link
 
-## Architecture
+## What's actually in here
+
+I trained two models on purpose, not one, so I'd have something to compare:
+
+- A CatBoost baseline on hand-computed MFCC statistics (mean/std per coefficient, plus deltas)
+- A small CNN on log-mel spectrograms
+
+The CNN wins by a wide margin — about 90-91% test accuracy versus CatBoost's 69%. Full breakdown, including where each model gets confused, is in `docs/technical_writeup.md` and `model_evaluation_results.md`. The short version: MFCC summary stats throw away the time structure of a word, so CatBoost can't reliably separate "unknown" (a grab-bag of random words) from anything else. The CNN sees the actual shape of the sound over time and does much better on exactly that class.
+
+## Pipeline
 
 ```
-Voice Input (mic, 1s clip)
-      |
-      v
-Preprocessing (src/data_prep.py)
-  resample 16kHz -> trim silence -> peak-normalize -> fix to 1.0s window
-      |
-      +---------------------------+
-      |                           |
-      v                           v
-MFCC stats (13 coef,        Log-mel spectrogram
-mean+std, +deltas)          (64 mels x ~101 frames)
-      |                           |
-      v                           v
-CatBoost                    CNN (3x Conv2D + GAP + Dense)
-(src/train_classical.py)    (src/train_cnn.py)
-      |                           |
-      v                           v
-   evaluate.py              export_tflite.py -> model.tflite
-                                   |
-                                   v
-                          mobile/ (Expo app)
-                          record -> extract features (JS, must mirror
-                          data_prep.py) -> run TFLite -> label + confidence
+Mic (1s clip)
+  -> resample to 16kHz, trim silence, normalize, pad/crop to fixed length   (src/data_prep.py)
+  -> MFCC stats (CatBoost) or log-mel spectrogram (CNN)
+  -> trained model -> predicted class + confidence
 ```
 
 ## Setup
@@ -43,82 +28,65 @@ CatBoost                    CNN (3x Conv2D + GAP + Dense)
 python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
-# Fetch data + build manifest (needs open internet — run in Colab if your
-# environment restricts network access)
+# needs real internet access — I ran this in Colab
 python src/download_data.py --out_dir data
 
-# Train both models
 python src/train_classical.py --manifest data/manifest.csv --out models/classical
 python src/train_cnn.py --manifest data/manifest.csv --out models/cnn
 
-# Evaluate (confusion matrix + top confusions)
 python src/evaluate.py --model_dir models/classical
 python src/evaluate.py --model_dir models/cnn
-
-# Export the CNN for mobile
-python src/export_tflite.py --model models/cnn/cnn_model.keras --out models/cnn/model.tflite
-cp models/cnn/model.tflite mobile/assets/model.tflite
 ```
 
-## Mobile app (client-server inference)
+## The mobile app — and why it's client-server, not on-device
 
-**Architecture note:** the original plan ran TFLite inference on-device,
-which needs a custom native build (EAS Build). That path was blocked by
-Gradle build failures compounded by an EAS infrastructure outage. This repo
-uses client-server inference instead: your laptop runs the trained model
-behind a small local API, the phone just records audio and uploads it. This
-runs in plain Expo Go with zero native modules. State this plainly in the
-write-up as a deliberate tradeoff, not a hidden shortcut — an on-device
-TFLite path remains a documented "next step," and `mobile/featureExtraction.js`
-(a verified, working JS port of the mel-spectrogram pipeline) is kept in the
-repo for exactly that future path.
+Originally I planned to export the CNN to TFLite and run inference directly on the phone. I got that far — `src/export_tflite.py` works and produces a 37KB model, and `mobile/featureExtraction.js` is a from-scratch JS port of the mel-spectrogram extraction that I numerically verified against the actual Python output (max difference 0.39dB across the whole spectrogram, checked with `scripts/verify_feature_parity.mjs`).
 
-1. Start the inference server on your laptop:
-   ```bash
-   python src/inference_server.py --model models/cnn/cnn_model.keras --port 8000
-   ```
-2. Find your laptop's LAN IP (Windows: `ipconfig`, look for "IPv4 Address"
-   under your WiFi adapter — something like `192.168.1.42`).
-3. In the app (or by editing `DEFAULT_SERVER_URL` in `mobile/App.js`), set
-   the server URL to `http://<that IP>:8000`.
-4. Run the app:
-   ```bash
-   cd mobile
-   npm install
-   npx expo start
-   ```
-   Scan the QR code with Expo Go. Phone and laptop must be on the same WiFi.
+Where it fell apart was the native Android build. `react-native-fast-tflite` needs a custom Expo dev client, which means building through EAS — and I hit a wall there: Gradle build failures on top of an actual EAS infrastructure outage on Expo's end that day (confirmed on their status page, not just a guess). After two failed builds I decided not to keep burning time on build infrastructure and switched to a simpler architecture: the phone records audio and sends it to a small FastAPI server running on my laptop, which runs the real trained model and sends back a prediction. Same model, same preprocessing, just running server-side instead of on-device.
 
-## On-device path (not required for the demo, documented for completeness)
+It works. The demo video above is that exact setup — phone and laptop on the same WiFi, live predictions with confidence scores.
 
-`mobile/featureExtraction.js` is a working, numerically-verified JS port of
-`data_prep.py`'s mel-spectrogram extraction (see `scripts/verify_feature_parity.mjs`
-— matched a librosa reference within 0.39dB max / 0.013dB mean difference).
-Wiring it to on-device TFLite inference would need a custom Expo dev client
-(`eas build --profile development --platform android`) — this is the
-integration point that was blocked by build infrastructure issues during
-this project's timeline, not by any gap in the feature-extraction code itself.
+To run it yourself:
+
+```bash
+# on your laptop
+pip install -r requirements.txt
+python src/inference_server.py --model models/cnn/cnn_model.keras --port 8000
+
+# find your laptop's LAN IP (ipconfig on Windows), set it as the server
+# URL in the app, then:
+cd mobile
+npm install
+npx expo start
+```
+
+Scan the QR code with Expo Go. Phone and laptop need to be on the same WiFi.
+
+The on-device TFLite path is still fully there in the code (`mobile/featureExtraction.js`, `src/export_tflite.py`) — I just didn't get it wired up end to end given the build issues. If EAS cooperates next time, that's the natural next step.
+
+## What I'd flag as genuinely hard, not just "future work"
+
+- **The `unknown` class.** Both models struggle with it relative to the actual keywords, and that's structural — it's a grab-bag category by design, not a bug to fix.
+- **Feature parity between Python and JS.** I got this working and verified for the on-device path, but it was easily the most failure-prone part of the whole project — a silent mismatch there would tank accuracy with no error thrown anywhere.
+- **Windows + ffmpeg without ffprobe.** The inference server originally used `pydub`, which calls a separate `ffprobe` binary regardless of what format you tell it — and `imageio-ffmpeg` only bundles `ffmpeg`, not `ffprobe`. Took a while to track down since the error message just said "file not found" with no indication of which file. Fixed by calling `ffmpeg` directly via subprocess instead of going through pydub at all.
 
 ## Repo layout
 
 ```
-src/               preprocessing, training, eval, export scripts
-mobile/            Expo app
-data/              manifest.csv + raw audio (gitignored, fetched by download_data.py)
-models/            trained model artifacts + confusion matrices (gitignored)
+src/               preprocessing, training, eval, TFLite export, inference server
+mobile/            Expo app (client-server inference) + the on-device JS pipeline
+scripts/           feature-parity verification (Python reference vs JS)
+data/              manifest.csv + raw audio (gitignored — regenerate with download_data.py)
+models/            trained models + confusion matrices (gitignored — regenerate by training)
 docs/              technical write-up
-notebooks/         exploratory notebooks (optional)
 ```
 
-## Status / next steps
+## Results, briefly
 
-- [x] Preprocessing pipeline (Phase 2) — implemented, smoke-tested
-- [x] Classical baseline + CNN training scripts (Phase 3–4)
-- [x] Evaluation + TFLite export (Phase 4–5)
-- [x] Mobile app shell with recording + inference wiring (Phase 6)
-- [ ] Run `download_data.py` and actually train both models — needs open
-      internet, do this in Colab
-- [ ] Port `featureExtraction.js` from stub to working JS, verified against
-      the Python reference
-- [ ] Fill in `docs/technical_writeup.md` with real metrics once trained
-- [ ] Record demo video
+| Model | Accuracy | Macro F1 |
+|---|---|---|
+| CatBoost (MFCC stats) | 68.7% | 0.68 |
+| CNN (log-mel), run 1 | 90.0% | 0.896 |
+| CNN (log-mel), run 2 | 91.0% | 0.908 |
+
+Full metrics, per-class breakdown, and confusion matrices are in `model_evaluation_results.md`.
