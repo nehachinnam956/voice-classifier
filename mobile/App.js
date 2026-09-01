@@ -1,28 +1,7 @@
-/**
- * App.js — Voice classifier mobile client (server-inference version).
- *
- * Flow: record 1s of audio -> POST the WAV file to the local inference
- * server (src/inference_server.py, running on your laptop) -> display the
- * returned label + confidence.
- *
- * WHY THIS ARCHITECTURE: the original plan ran TFLite inference on-device,
- * which needs a custom native build (EAS Build / Gradle). That path hit
- * repeated build failures partly caused by an EAS infrastructure outage.
- * This version swaps to client-server inference: the phone just records
- * and uploads audio, the actual model runs on your laptop. This works in
- * plain Expo Go with zero native modules, at the cost of requiring phone
- * and laptop on the same WiFi network. Worth stating plainly in the
- * write-up as a deliberate architecture choice, not a hidden shortcut.
- *
- * SETUP: change SERVER_URL below to your laptop's LAN IP (not localhost —
- * the phone is a different device on the network). Find it with
- * `ipconfig` on Windows, look for "IPv4 Address" under your WiFi adapter.
- */
+
 import React, { useState } from "react";
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput } from "react-native";
 import { Audio } from "expo-av";
-
-// CHANGE THIS to your laptop's LAN IP, e.g. "http://192.168.1.42:8000"
 const DEFAULT_SERVER_URL =  "http://192.168.0.5:8000";
 const RECORD_MS = 1000;
 
