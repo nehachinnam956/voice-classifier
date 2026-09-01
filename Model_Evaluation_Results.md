@@ -15,9 +15,11 @@ on log-mel spectrograms.
 | Model | Features | Test Accuracy | Macro F1 |
 |---|---|---|---|
 | CatBoost | MFCC stats (78-dim: 13 coef × mean/std × 3 for delta/delta-delta) | 68.68% | 0.682 |
-| CNN | Log-mel spectrogram (64 × 101 × 1) | **90.03%** | **0.896** |
+| CNN (Run 1) | Log-mel spectrogram (64 × 101 × 1) | 90.03% | 0.896 |
+| CNN (Run 2) | Log-mel spectrogram (64 × 101 × 1) | **91.00%** | **0.9075** |
 
-The CNN outperforms the classical baseline by **21 points of accuracy**. The
+The CNN outperforms the classical baseline by roughly **21-22 points of accuracy**,
+consistent across two independent training runs (90.0% and 91.0%). The
 gap is explained by what each feature representation preserves: MFCC summary
 statistics collapse all temporal structure into a mean and standard
 deviation per coefficient, discarding the shape of how a word unfolds over
@@ -82,7 +84,42 @@ similar vowel sound.
 **Architecture:** 3× Conv2D (16→32→64 filters) + GlobalAveragePooling2D +
 Dropout(0.3) + Dense(64) + Dense(12, softmax). 28,236 parameters (110 KB).
 Trained with early stopping (patience 8) and LR reduction on plateau;
-converged around epoch 44–50 at val_accuracy ≈ 0.90–0.90.
+converged around epoch 44–50 at val_accuracy ≈ 0.90–0.91.
+
+**Run-to-run stability:** the CNN was trained twice independently (same
+architecture, same data split, different random weight initialization).
+Results were consistent across both runs, indicating the model's
+performance is stable rather than a lucky single result:
+
+| Run | Test Accuracy | Macro F1 |
+|---|---|---|
+| Run 1 | 90.03% | 0.8962 |
+| Run 2 | 91.00% | 0.9075 |
+
+Full classification report below is from Run 2 (the more recent run).
+
+```
+              precision    recall  f1-score   support
+
+        down       0.92      0.87      0.89       588
+          go       0.87      0.85      0.86       582
+        left       0.95      0.91      0.93       570
+          no       0.88      0.95      0.91       591
+         off       0.91      0.89      0.90       562
+          on       0.92      0.94      0.93       577
+       right       0.94      0.92      0.93       567
+     silence       0.99      1.00      1.00       578
+        stop       0.92      0.95      0.93       581
+     unknown       0.78      0.73      0.75       578
+          up       0.86      0.92      0.89       558
+         yes       0.96      0.96      0.96       607
+
+    accuracy                           0.91      6939
+   macro avg       0.91      0.91      0.91      6939
+weighted avg       0.91      0.91      0.91      6939
+```
+
+For reference, Run 1's full classification report:
 
 ```
               precision    recall  f1-score   support
@@ -105,7 +142,7 @@ converged around epoch 44–50 at val_accuracy ≈ 0.90–0.90.
 weighted avg       0.90      0.90      0.90      6939
 ```
 
-**Top confusions (true → predicted, count):**
+**Top confusions (Run 1, true → predicted, count):**
 
 | True | Predicted | Count |
 |---|---|---|
