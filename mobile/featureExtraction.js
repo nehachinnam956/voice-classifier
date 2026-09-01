@@ -1,22 +1,3 @@
-/**
- * featureExtraction.js — JS port of src/data_prep.py::extract_mel_spectrogram.
- *
- * Self-contained: implements its own radix-2 FFT and mel filterbank rather
- * than pulling in a DSP dependency, so there's nothing else to install or
- * version-match. Matches librosa's defaults used in training:
- *   - window: Hann
- *   - center=True, pad_mode='constant' (zero-pad by n_fft//2 each side)
- *   - mel scale: Slaney (htk=False), Slaney-normalized filter weights
- *   - power_to_db with ref=max
- *
- * VERIFIED: this exact algorithm was checked against a real librosa
- * reference array and matched within numerical tolerance for a synthetic
- * test clip (see the verification script referenced in the repo). Re-verify
- * with a real recorded word before shipping — synthetic sine waves don't
- * exercise every code path (e.g. the trim-silence step is not yet ported;
- * see TODO at the bottom).
- */
-
 export const SAMPLE_RATE = 16000;
 export const CLIP_SAMPLES = 16000; // 1.0s
 export const N_MELS = 64;
@@ -199,23 +180,6 @@ export function melSpectrogramFromSamples(samples) {
   }
   return logMel;
 }
-
-/**
- * @param {Float32Array} pcmSamples - decoded PCM samples, already resampled
- *   to 16kHz mono in [-1, 1] range.
- * @returns {Float32Array} flattened (N_MELS * nFrames) log-mel, ready to
- *   reshape to the model's [1, N_MELS, nFrames, 1] input.
- *
- * TODO before shipping: this function assumes `pcmSamples` is already
- * trim-silenced, peak-normalized, and fixed to CLIP_SAMPLES length — i.e.
- * it only ports extract_mel_spectrogram, not the full preprocess_audio
- * chain from data_prep.py. Port trim_silence/normalize_amplitude/fix_length
- * too (they're simpler than the FFT/mel code above) before wiring this
- * into App.js's stopRecordingAndClassify. Reasonable v1 shortcut: skip
- * silence trimming on-device (a fixed 1s window is usually enough) but do
- * implement peak-normalize and fix_length — those are ~10 lines each.
- */
-/** Peak-normalize to [-1, 1]. Mirrors data_prep.normalize_amplitude. */
 export function normalizeAmplitude(samples) {
   let peak = 0;
   for (let i = 0; i < samples.length; i++) peak = Math.max(peak, Math.abs(samples[i]));
@@ -224,12 +188,6 @@ export function normalizeAmplitude(samples) {
   for (let i = 0; i < samples.length; i++) out[i] = samples[i] / peak;
   return out;
 }
-
-/**
- * Center-crop or symmetric zero-pad to CLIP_SAMPLES.
- * Mirrors data_prep.fix_length exactly (crop favors the center, not the
- * start, so a word starting slightly late isn't chopped off).
- */
 export function fixLength(samples, target = CLIP_SAMPLES) {
   const n = samples.length;
   if (n === target) return samples;
@@ -243,18 +201,6 @@ export function fixLength(samples, target = CLIP_SAMPLES) {
   const start = Math.floor((n - target) / 2);
   return samples.slice(start, start + target);
 }
-
-/**
- * Decode a base64-encoded 16-bit PCM WAV file into Float32 samples in
- * [-1, 1]. Assumes mono 16-bit PCM (matches the recording config in
- * App.js's Audio.Recording.createAsync call) and reads the actual sample
- * rate from the WAV header rather than assuming 16kHz — if the device
- * recorded at a different rate, resample before calling extractMelSpectrogram
- * or accuracy will be wrong even though nothing throws.
- *
- * @param {string} base64Wav
- * @returns {{ samples: Float32Array, sampleRate: number }}
- */
 export function decodeWavBase64(base64Wav) {
   const binary = globalThis.atob
     ? globalThis.atob(base64Wav)
@@ -262,10 +208,6 @@ export function decodeWavBase64(base64Wav) {
   const bytes = new Uint8Array(binary.length);
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   const view = new DataView(bytes.buffer);
-
-  // Standard WAV header: 'RIFF'....'WAVE''fmt '....'data'....<pcm bytes>
-  // Locate the 'data' chunk rather than assuming a fixed 44-byte header,
-  // since some encoders add extra chunks (e.g. 'LIST') before it.
   const sampleRate = view.getUint32(24, true);
   const bitsPerSample = view.getUint16(34, true);
   let offset = 12;
@@ -297,16 +239,6 @@ export function decodeWavBase64(base64Wav) {
   }
   return { samples, sampleRate };
 }
-
-/**
- * @param {Float32Array} pcmSamples - decoded PCM samples, 16kHz mono,
- *   NOT yet normalized or length-fixed (this function does both). Silence
- *   trimming is intentionally NOT applied here — see TODO note above the
- *   melSpectrogramFromSamples doc comment; a fixed 1s window is used as
- *   the v1 shortcut instead.
- * @returns {Float32Array} flattened (N_MELS * nFrames) log-mel, ready to
- *   reshape to the model's [1, N_MELS, nFrames, 1] input.
- */
 export function extractMelSpectrogram(pcmSamples) {
   const normalized = normalizeAmplitude(pcmSamples);
   const fixed = fixLength(normalized);
