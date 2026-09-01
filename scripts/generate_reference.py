@@ -1,11 +1,3 @@
-"""
-generate_reference.py — Regenerate ref_data.json, the librosa reference
-used by verify_feature_parity.mjs to numerically check the JS mel
-extraction against the real Python pipeline. Re-run this (and the JS
-verify script) any time data_prep.py's preprocessing constants change.
-
-Usage: python scripts/generate_reference.py
-"""
 import sys, os, json
 import numpy as np
 import soundfile as sf
