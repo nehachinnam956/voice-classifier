@@ -1,13 +1,3 @@
-"""
-train_classical.py — Baseline: MFCC summary stats -> CatBoost.
-
-This is the fast, interpretable baseline. Run after download_data.py has
-produced data/manifest.csv.
-
-Usage:
-    python src/train_classical.py --manifest data/manifest.csv --out models/classical
-"""
-
 import argparse
 import os
 import csv
