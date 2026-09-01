@@ -1,24 +1,3 @@
-"""
-inference_server.py — Local inference bridge for the mobile app.
-
-Runs on your laptop, loads the trained CNN, and exposes one endpoint that
-accepts a recorded WAV clip and returns a prediction + confidence. This
-exists specifically to avoid the mobile-native-build path (EAS/Gradle):
-the phone just sends audio over your local WiFi and gets JSON back — no
-TFLite native module, no custom dev client, works in plain Expo Go.
-
-This is architecturally identical to what a real deployed backend would
-look like, minus auth/scaling — a legitimate design choice for a demo,
-not a shortcut around "real" inference.
-
-Usage:
-    python src/inference_server.py --model models/cnn/cnn_model.keras --port 8000
-
-Find your laptop's LAN IP (needed by the phone to reach this server):
-    Windows: ipconfig  -> look for "IPv4 Address" under your WiFi adapter
-Then in mobile/App.js, set SERVER_URL to http://<that IP>:8000
-"""
-
 import argparse
 import io
 import os
@@ -30,14 +9,6 @@ from fastapi import FastAPI, File, UploadFile
 from fastapi.responses import JSONResponse
 import uvicorn
 import imageio_ffmpeg
-
-# We call ffmpeg directly via subprocess rather than through pydub.
-# pydub's AudioSegment.from_file() unconditionally calls a separate
-# "ffprobe" binary (regardless of the format= parameter) to read stream
-# metadata before decoding — imageio_ffmpeg does NOT bundle ffprobe, only
-# ffmpeg, so that call fails with FileNotFoundError on any machine that
-# doesn't have ffprobe installed separately. Piping bytes straight into
-# ffmpeg and reading raw PCM back out avoids needing ffprobe at all.
 FFMPEG_PATH = imageio_ffmpeg.get_ffmpeg_exe()
 
 import sys
@@ -64,13 +35,6 @@ def load_model_and_classes(model_path: str):
 
 
 def decode_audio_with_ffmpeg(raw_bytes: bytes, target_sr: int = SAMPLE_RATE) -> np.ndarray:
-    """
-    Decode any audio format ffmpeg understands (AAC/M4A, WAV, etc.) straight
-    to mono float32 PCM at target_sr, entirely via subprocess — no pydub,
-    no ffprobe dependency. Bytes go in on stdin, raw PCM comes out on
-    stdout, and we know the format because we told ffmpeg to produce it
-    (s16le), so no metadata-probing step is needed.
-    """
     cmd = [
         FFMPEG_PATH, "-i", "pipe:0",
         "-f", "s16le", "-acodec", "pcm_s16le",
@@ -91,12 +55,6 @@ def health():
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
-    """
-    Accepts a recorded audio clip in whatever format the phone actually
-    produced (Android: AAC/M4A despite any ".wav" filename; iOS: usually
-    real WAV or CAF). Decodes via direct ffmpeg subprocess, then runs the
-    exact same preprocessing as training.
-    """
     raw_bytes = await file.read()
 
     try:
@@ -108,9 +66,6 @@ async def predict(file: UploadFile = File(...)):
         traceback.print_exc()
         print("=" * 60)
         return JSONResponse(status_code=400, content={"error": f"Could not decode audio: {e}"})
-
-    # exact same pipeline as training (data_prep.preprocess_audio, inlined
-    # here since preprocess_audio expects a file path, not an array)
     y = trim_silence(y)
     y = normalize_amplitude(y)
     y = fix_length(y)
