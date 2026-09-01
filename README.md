@@ -13,6 +13,29 @@ I trained two models on purpose, not one, so I'd have something to compare:
 
 The CNN wins by a wide margin — about 90-91% test accuracy versus CatBoost's 69%. Full breakdown, including where each model gets confused, is in `docs/technical_writeup.md` and `model_evaluation_results.md`. The short version: MFCC summary stats throw away the time structure of a word, so CatBoost can't reliably separate "unknown" (a grab-bag of random words) from anything else. The CNN sees the actual shape of the sound over time and does much better on exactly that class.
 
+## Tech stack
+
+**Data & preprocessing**
+Google Speech Commands v0.02, librosa (resampling, silence trimming, MFCC/mel-spectrogram extraction), soundfile, numpy/scipy.
+
+**Models**
+CatBoost (MFCC-statistics baseline), TensorFlow/Keras (CNN on log-mel spectrograms), scikit-learn (splitting, label encoding, metrics).
+
+**Evaluation**
+matplotlib for confusion matrix plots.
+
+**Model export**
+TensorFlow Lite — the on-device export path (built and verified, not currently wired into the running app — see below).
+
+**Inference server**
+FastAPI + Uvicorn, with ffmpeg (via `imageio-ffmpeg`, invoked directly through `subprocess`) decoding whatever audio format the phone sends.
+
+**Mobile app**
+React Native, Expo (SDK 54), expo-av for recording.
+
+**Tooling**
+Google Colab (T4 GPU) for training, Node.js for the feature-parity verification script (a hand-written FFT + mel filterbank in plain JS, no DSP library), Git/GitHub.
+
 ## Pipeline
 
 ```
